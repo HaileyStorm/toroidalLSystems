@@ -1,0 +1,137 @@
+📌 Project Overview & Structure:
+- Project Name: Hypertoroidal L-System Networks
+- Core Concept: Networks of interconnected toroidal arrays with growth and connectivity determined by L-system rules
+- Files Structure:
+  hypertoroidal_lsystem_network/
+  ├── torus.py               (already implemented [previous project, may need adjustment to align])
+  ├── network_generator.py   (L-system based generation)
+  ├── pathway.py             (inter-toroid connections)
+  ├── junction.py            (toroid intersections)
+  ├── network.py             (primary container & manager)
+  ├── visualize.py           (network representation)
+  └── maze_solver_example.py (demonstration scenario)
+
+Key Implementation Strategies:
+1. Bottom-up construction: pathways → junctions → network
+2. Flexible dimensionality in all components
+3. Stochastic, parameter-driven network generation
+4. Clear separations between generation, structure, and dynamics
+
+Development Phases:
+1. Core structures (pathways, junctions)
+2. Network management
+3. L-system based generation
+4. Visualization
+5. Example scenario
+
+
+🔹 network_generator.py:
+
+1. `Symbol(Enum)`:
+   - Values: CREATE_TORUS, CONNECT_TOROIDS, START_BRANCH, END_BRANCH, TRANSFORM
+   - Each symbol will have an associated integer parameter for variation
+
+2. `Rule`:
+   - `predecessor: Symbol`
+   - `successor: List[Symbol]`
+   - `probability: float`
+
+3. `NetworkGenerator`:
+   - `rules: Dict[Symbol, List[Rule]]`
+   - `axiom: List[Symbol]`
+   - `generate(iterations: int) -> List[Symbol]`
+   - Uses NumPy for random selection based on probabilities
+
+🔹 pathway.py:
+
+1. `TransferFunction(Protocol)`:
+   - `__call__(data: np.ndarray) -> np.ndarray`
+
+2. `Pathway`:
+   - `source: Tuple[Torus, Tuple[slice, ...]]`
+   - `target: Tuple[Torus, Tuple[slice, ...]]`
+   - `transfer_fn: TransferFunction`
+   - `update() -> None`: Applies transfer_fn and updates target
+   - Allow broadcasting in slice mappings
+
+🔹 junction.py:
+
+1. `Junction`:
+   - `inputs: List[Tuple[Torus, Tuple[slice, ...]]]`
+   - `output: Tuple[Torus, Tuple[slice, ...]]`
+   - `operation: Callable[[List[np.ndarray]], np.ndarray]`
+   - `update() -> None`: Gathers inputs, applies operation, sets output
+
+🔹 network.py:
+
+1. `Network`:
+   - `toroids: Dict[int, Torus]`  # int is unique identifier
+   - `pathways: List[Pathway]`
+   - `junctions: List[Junction]`
+   - `tick() -> None`: Updates all pathways and junctions
+   - `inject_data(torus_id: int, data: np.ndarray, location: Tuple[slice, ...]) -> None`
+   - `read_data(torus_id: int, location: Tuple[slice, ...]) -> np.ndarray`
+
+🔹 visualize.py:
+1. `TextNetworkVisualizer`:
+   - Renders ASCII diagram of network
+   - Shows toroids as [T1], [T2], etc
+   - Pathways as arrows: →
+   - Junctions as asterisks: *
+   - `visualize(network: Network) -> str`
+   - Uses `textwrap` for formatting
+   - Sample output:
+     ```
+     [T1] → [T2]
+      ↓     ↓
+     [T3] * [T4]
+     ```
+2. Future extension placeholder: `GraphNetworkVisualizer` using networkx/matplotlib
+
+
+🔹 Math & Architecture Decisions:
+1. All data transfer preserves dimensionality
+2. Use LCM (Least Common Multiple) for size matching, like in Torus arithmetic
+3. Support n-dimensional toroids and transfers
+4. Arithmetic operations (+, *, etc) as default transfer functions
+5. Junctions support element-wise and reduction operations (sum, mean, min, max)
+6. L-system uses stochastic context-free grammar initially
+
+🔹 maze_solver_example.py:
+- Create 2D toroidal maze representation
+- Information "floods" through open pathways
+- Use sigmoid transfer function to create "pressure" mechanic
+- Junction max operation finds optimal paths
+
+🔹 Implementation Order:
+1. NetworkGenerator (simplified)
+2. Pathway
+3. Junction
+4. Network
+5. Enhance NetworkGenerator
+
+🔹 Data Types:
+- All numeric data: np.float32
+- All indices: np.int32
+- Boolean masks: np.bool_
+
+🔹 Performance Considerations:
+- Use `np.vectorize` for transfer functions when possible
+- Employ `np.einsum` for complex slice mappings
+- Pre-allocate arrays in junctions and pathways
+
+🔹 Extensibility Hooks:
+1. Custom Symbol subclasses
+2. Pluggable TransferFunction protocol
+3. Network to accept custom tick logic
+
+Error handling strategy:
+- Type checks using runtime_checkable protocols
+- Value range validations
+- Clear error messages with context
+
+Testing strategy:
+- Property-based testing for L-system generation
+- Edge case unit tests for Pathway and Junction
+- Integration tests on small networks
+- Performance benchmarks
