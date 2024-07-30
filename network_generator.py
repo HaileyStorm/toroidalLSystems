@@ -1,7 +1,7 @@
+from typing import List, Dict, Tuple, Any
 import numpy as np
 from enum import Enum, auto
-from typing import List, Dict, NamedTuple
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 class Symbol(Enum):
@@ -19,11 +19,11 @@ class Symbol(Enum):
 @dataclass
 class Rule:
     predecessor: Symbol
-    successor: List[Symbol]
+    successor: List[Any]  # Can be Symbol or List[Symbol] for branching
     probability: float = 1.0
 
     def __post_init__(self):
-        assert 0 <= self.probability <= 1, "Probability must be between 0 and 1"
+        assert 0 <= self.probability <= 1, f"Invalid probability: {self.probability}"
 
 
 class NetworkGenerator:
@@ -31,15 +31,16 @@ class NetworkGenerator:
         self.axiom: List[Symbol] = [Symbol.CREATE_TORUS]
         self.rules: Dict[Symbol, List[Rule]] = {
             Symbol.CREATE_TORUS: [
-                Rule(Symbol.CREATE_TORUS, [Symbol.CREATE_TORUS, Symbol.CONNECT_TOROIDS], 0.7),
-                Rule(Symbol.CREATE_TORUS, [Symbol.START_BRANCH, Symbol.CREATE_TORUS, Symbol.END_BRANCH], 0.3)
+                Rule(Symbol.CREATE_TORUS, [Symbol.CREATE_TORUS, Symbol.CONNECT_TOROIDS], 0.6),
+                Rule(Symbol.CREATE_TORUS, [[Symbol.CREATE_TORUS, Symbol.TRANSFORM], [Symbol.CREATE_TORUS]], 0.3),
+                # Multiple branches
+                Rule(Symbol.CREATE_TORUS, [Symbol.CREATE_TORUS], 0.1)  # Identity-like rule
             ],
             Symbol.CONNECT_TOROIDS: [
-                Rule(Symbol.CONNECT_TOROIDS, [Symbol.CONNECT_TOROIDS, Symbol.TRANSFORM], 0.6),
-                Rule(Symbol.CONNECT_TOROIDS, [Symbol.TRANSFORM], 0.4)
+                Rule(Symbol.CONNECT_TOROIDS, [Symbol.CONNECT_TOROIDS, Symbol.TRANSFORM], 0.7),
+                Rule(Symbol.CONNECT_TOROIDS, [Symbol.TRANSFORM], 0.3)
             ]
         }
-        self._normalize_probabilities()
 
     def select_rule(self, symbol: Symbol) -> Rule:
         candidates = self.rules.get(symbol, [])
@@ -50,70 +51,39 @@ class NetworkGenerator:
         normalized_probabilities = [p / sum(probabilities) for p in probabilities]
         return np.random.choice(candidates, p=normalized_probabilities)
 
-    def generate(self, iterations: int = 3) -> List[List[Symbol]]:
-        result = [self.axiom.copy()]
+    def produce(self, sequence: List[Any], depth: int = 3) -> List[Any]:
+        if depth <= 0:
+            return sequence
 
-        for _ in range(iterations):
-            new_sequence = []
-            for branch in result:
-                new_branch = []
-                i = 0
-                while i < len(branch):
-                    symbol = branch[i]
-                    if symbol == Symbol.START_BRANCH:
-                        sub_branch, i = self._generate_sub_branch(branch, i + 1)
-                        new_branch.append(sub_branch)
-                    else:
-                        rule = self.select_rule(symbol)
-                        new_branch.extend(rule.successor)
-                    i += 1
-                new_sequence.append(new_branch)
-            result = new_sequence
+        result = []
+        for item in sequence:
+            if isinstance(item, Symbol):
+                rule = self.select_rule(item)
+                result.extend(self.produce(rule.successor, depth - 1))
+            elif isinstance(item, list):
+                # If we get a list, we have a branch: produce it recursively
+                result.append(self.produce(item, depth - 1))
+            else:
+                result.append(item)
 
-        return result[0]  # Return the main branch for now
+        return result
 
-    def _generate_sub_branch(self, sequence, start):
-        depth = 1
-        end = start
-        while depth > 0:
-            if sequence[end] == Symbol.START_BRANCH:
-                depth += 1
-            elif sequence[end] == Symbol.END_BRANCH:
-                depth -= 1
-            end += 1
-        return self.generate(1)[0], end  # Recursively generate sub-branch
+    def generate(self, iterations: int = 3) -> List[Any]:
+        return self.produce(self.axiom, depth=iterations)
 
     @staticmethod
-    def interpret_sequence(sequence: List[Symbol]) -> str:
-        """Debug helper: text-interpretation of generated sequence"""
-        message = []
-        indent = 0
-        for i, symbol in enumerate(sequence):
-            if symbol == Symbol.START_BRANCH:
-                indent += 1
-            elif symbol == Symbol.END_BRANCH:
-                indent -= 1
-
-            msg = f"{'  ' * indent}{symbol.name}(P={symbol.parameter})"
-            message.append(msg)
-
-        return "\n".join(message)
-
-    def _normalize_probabilities(self):
-        for symbol, rules in self.rules.items():
-            total_prob = sum(rule.probability for rule in rules)
-            if total_prob != 1:
-                print(f"Warning: Total probability for {symbol} is {total_prob}, normalizing...")
-                factor = 1 / total_prob
-                for rule in rules:
-                    rule.probability *= factor
+    def render_sequence(sequence: List[Any], depth: int = 0):
+        for item in sequence:
+            if isinstance(item, Symbol):
+                print("  " * depth + f"{item.name}(p={item.parameter})")
+            elif isinstance(item, list):
+                print("  " * depth + "⎡ BRANCH:")
+                NetworkGenerator.render_sequence(item, depth + 1)
+                print("  " * depth + "⎣ END BRANCH")
 
 
 if __name__ == "__main__":
-    #np.random.seed(1137)  # For reproducibility
     generator = NetworkGenerator()
-    sequence = generator.generate(iterations=5)
-
-    print(f"Generated {len(sequence)} symbols!")
-    print("L-system sequence interpretation:")
-    print(generator.interpret_sequence(sequence))
+    result = generator.generate(iterations=5)
+    print("Tree-based L-System result:")
+    generator.render_sequence(result)
