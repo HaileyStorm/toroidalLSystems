@@ -4,6 +4,7 @@ import numpy as np
 from enum import Enum, auto
 from dataclasses import dataclass, field
 
+
 # Symbols for our L-system, representing network construction operations
 class Symbol(Enum):
     CREATE_TORUS = auto()
@@ -18,11 +19,13 @@ class Symbol(Enum):
         # This allows for more varied networks in pathway/network construction
         return np.random.randint(0, 100)
 
+
 @dataclass
 class Rule:
     predecessor: Symbol
     successor: List[Any]
     weight: float = 1.0  # Rule probability weight
+
 
 @dataclass
 class NetworkGeneratorConfig:
