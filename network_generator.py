@@ -1,9 +1,10 @@
+import random
 from typing import List, Dict, Tuple, Any, Union
 import numpy as np
 from enum import Enum, auto
 from dataclasses import dataclass, field
 
-
+# Symbols for our L-system, representing network construction operations
 class Symbol(Enum):
     CREATE_TORUS = auto()
     CONNECT_TOROIDS = auto()
@@ -13,8 +14,9 @@ class Symbol(Enum):
 
     @property
     def parameter(self):
+        # Each symbol can have an associated random parameter
+        # This allows for more varied networks in pathway/network construction
         return np.random.randint(0, 100)
-
 
 @dataclass
 class Rule:
@@ -22,34 +24,51 @@ class Rule:
     successor: List[Any]
     weight: float = 1.0  # Rule probability weight
 
-
 @dataclass
 class NetworkGeneratorConfig:
-    max_depth: int = 5
-    balance_factor: float = 0.5  # Higher means less branching
-    branching_factor: int = 2  # Max number of branches
+    # Configuration for the L-system network generator
+    # This allows us to control network complexity and characteristics
+    max_depth: int = 5  # Maximum depth of the network tree
+    balance_factor: float = 0.5  # Controls network complexity. Higher values (approaching 1.0) produce more linear networks, lower values produce more branching
+    branching_factor: int = 2  # Maximum number of branches at each branching point
     create_torus_weights: List[float] = field(default_factory=lambda: [0.6, 0.3, 0.1])
     connect_toroids_weights: List[float] = field(default_factory=lambda: [0.7, 0.3])
+    seed: int = None  # Optional seed for consistent network generation, critical for repeatable maze generation
 
 
 class NetworkGenerator:
     def __init__(self, config: NetworkGeneratorConfig = NetworkGeneratorConfig()):
         self.config = config
+        if self.config.seed is not None:
+            np.random.seed(self.config.seed)
+            random.seed(self.config.seed)
+
+        # Here we define the grammar of our L-system
+        # These rules will dictate how our network "grows" during generation
         self.axiom: List[Symbol] = [Symbol.CREATE_TORUS]
         self.rules: Dict[Symbol, List[Rule]] = {
             Symbol.CREATE_TORUS: [
-                Rule(Symbol.CREATE_TORUS, [Symbol.CREATE_TORUS, Symbol.CONNECT_TOROIDS],
-                     weight=self.config.create_torus_weights[0]),
-                Rule(Symbol.CREATE_TORUS, [[Symbol.CREATE_TORUS, Symbol.TRANSFORM], [Symbol.CREATE_TORUS]],
-                     weight=self.config.create_torus_weights[1]),
+                Rule(Symbol.CREATE_TORUS, [Symbol.CREATE_TORUS, Symbol.CONNECT_TOROIDS], weight=self.config.create_torus_weights[0]),
+                Rule(Symbol.CREATE_TORUS, [[Symbol.CREATE_TORUS, Symbol.TRANSFORM], [Symbol.CREATE_TORUS]], weight=self.config.create_torus_weights[1]),
                 Rule(Symbol.CREATE_TORUS, [Symbol.CREATE_TORUS], weight=self.config.create_torus_weights[2])
             ],
             Symbol.CONNECT_TOROIDS: [
-                Rule(Symbol.CONNECT_TOROIDS, [Symbol.CONNECT_TOROIDS, Symbol.TRANSFORM],
-                     weight=self.config.connect_toroids_weights[0]),
+                Rule(Symbol.CONNECT_TOROIDS, [Symbol.CONNECT_TOROIDS, Symbol.TRANSFORM], weight=self.config.connect_toroids_weights[0]),
                 Rule(Symbol.CONNECT_TOROIDS, [Symbol.TRANSFORM], weight=self.config.connect_toroids_weights[1])
             ]
         }
+
+        # Re-normalize in case non-default values were provided
+        self.config.create_torus_weights = self.normalize_weights(self.config.create_torus_weights, "create_torus_weights")
+        self.config.connect_toroids_weights = self.normalize_weights(self.config.connect_toroids_weights, "connect_toroids_weights")
+
+    @staticmethod
+    def normalize_weights(weights: List[float], name: str) -> List[float]:
+        total = sum(weights)
+        if abs(total - 1.0) > 1e-6:
+            print(f"Warning: {name} add up to {total:.4f}, not 1.0. Auto-normalizing.")
+            return [w / total for w in weights]
+        return weights
 
     def select_rule(self, symbol: Symbol) -> Rule:
         candidates = self.rules.get(symbol, [])
@@ -104,6 +123,6 @@ if __name__ == "__main__":
     config = NetworkGeneratorConfig(max_depth=5, balance_factor=0.7, branching_factor=2,
                                     create_torus_weights=[0.6, 0.3, 0.1], connect_toroids_weights=[0.7, 0.3])
     generator = NetworkGenerator(config)
-    result = generator.generate()  # No iteration count
+    result = generator.generate()  # Generate the "recipe" for our toroidal network
     print("Tree-based L-System result:")
     generator.render_sequence(result)

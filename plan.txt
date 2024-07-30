@@ -108,7 +108,7 @@ Development Phases:
 2. Pathway
 3. Junction
 4. Network
-5. Enhance NetworkGenerator
+5. Enhance NetworkGenerator (including the ability to update/expand and possibly evolve networks)
 
 🔹 Data Types:
 - All numeric data: np.float32
@@ -135,3 +135,40 @@ Testing strategy:
 - Edge case unit tests for Pathway and Junction
 - Integration tests on small networks
 - Performance benchmarks
+
+
+
+------------------------
+
+
+Today we've:
+1. Evolved our L-System based Network Generator from a linear production system into a tree-structured, recursion-driven, genuinely-branching L-System.
+2. Added a degree of error-resilience, particularly around recursion.
+3. Introduced a configuration object (NetworkGeneratorConfig) which allows:
+   • Control over network complexity (max_depth)
+   • Control over network topology (balance_factor, branching_factor)
+   • Rule weighting (create_torus_weights, connect_toroids_weights)
+   • Deterministic output (seed)
+4. Implemented auto-normalization for our rule weights (// which maintains error-tolerance while preventing undefined behavior)
+5. Implemented a general tracer (render_sequence) which provides a text-based, human-readable output of our network "recipe"
+
+Key output: Our network generator produces a "recipe" — a executable, branching, reproducible description of a toroidal network — NOT the network itself.
+
+Key interface details:
+• Our "recipe" consists of Lists of Symbols/Lists[Symbols]  // where each Symbol carries a quantitative parameter
+• config = NetworkGeneratorConfig(params...) provides complete runtime configuration
+• generate() provides the recipe   // no parameters required; uses config
+• Rules are stochastic & weighted, but can be made deterministic via seed
+
+Critical for next phase:
+• The Pathway, Junction, and Network implementations will need to interpret & instantiate our "recipe"
+• We have five instruction types (Symbol VALUES) which they'll need to implement:
+   CREATE_TORUS  // which requires creating a new Torus object
+   CONNECT_TOROIDS  // which requires creating a new Pathway between two Tori
+   TRANSFORM  // which requires mutating an existing Torus
+   START_BRANCH, END_BRANCH   // which require parallel execution of a sequence
+
+Next steps:
+1. Implement Pathway  // which defines how two Tori interact
+2. Implement Junction  // which defines how multiple Tori can have a shared interaction-point
+3. Implement Network  // which interprets our recipe, instantiates Tori, Pathways, and Junctions, and manages information flow & evolution
