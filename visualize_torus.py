@@ -126,3 +126,33 @@ def update(frame):
 ani = FuncAnimation(fig, update, frames=360, interval=100, blit=False)
 plt.tight_layout()
 plt.show()
+
+
+# FUTURE PLAN:
+"""
+1. HOLE DEFORMATION:
+   - Create a minimal, symmetrical deformation around holes.
+   - Implement a 3D displacement field with a small neighborhood effect.
+   - Use a simple, perhaps linear or shallow polynomial function for the deformation shape.
+   - Keep the maximum displacement relatively small to maintain the overall torus shape.
+
+2. COLORIZATION:
+   - Use the native color/value of exposed voxel-faces for hole surfaces.
+   - Maintain sharp color transitions at hole edges, consistent with the voxel concept.
+   - No special texture/sheen for hole surfaces to keep consistent with the current implementation.
+
+3. VISPY MIGRATION:
+   - Approach as a port, maintaining as much of the current logic and error-detection as possible.
+   - Key steps:
+     a. Replace matplotlib/mplot3d with vispy scene setup.
+     b. Convert plot_surface() to vispy mesh construction.
+     c. Replace FuncAnimation() with vispy's event loop and update mechanism.
+     d. Maintain current architecture as much as possible, including error checking and the backing array structure.
+   - Shader compute load will be kept minimal, focusing on efficient rendering of the current model rather than complex on-GPU computations.
+
+Next steps would involve:
+1. Implementing the hole deformation in the current matplotlib version as a proof of concept.
+2. Setting up a basic vispy environment and porting the current torus rendering (without holes or deformation).
+3. Incrementally adding hole rendering, deformation, and colorization to the vispy version.
+4. Ensuring all current error-checking and edge cases are properly handled in the new implementation.
+"""
