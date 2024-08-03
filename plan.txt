@@ -141,8 +141,8 @@ Testing strategy:
 ------------------------
 
 
-Today we've:
-1. Evolved our L-System based Network Generator from a linear production system into a tree-structured, recursion-driven, genuinely-branching L-System.
+So far we've:
+1. Implemented our L-System based Network Generator as a tree-structured, recursion-driven, genuinely-branching L-System.
 2. Added a degree of error-resilience, particularly around recursion.
 3. Introduced a configuration object (NetworkGeneratorConfig) which allows:
    • Control over network complexity (max_depth)
