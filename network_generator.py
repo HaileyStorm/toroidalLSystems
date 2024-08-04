@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 # Symbols for our L-system, representing network construction operations
 class Symbol(Enum):
     CREATE_TORUS = auto()
-    CONNECT_TOROIDS = auto()
+    CONNECT_TOROIDS = auto()  # Does this need more than one paramter to work with for us to define inter-toroid connections? E.g. do we need a mask or range of indices that get copied into the destination, or....??????)
     START_BRANCH = auto()
     END_BRANCH = auto()
     TRANSFORM = auto()
@@ -129,3 +129,35 @@ if __name__ == "__main__":
     result = generator.generate()  # Generate the "recipe" for our toroidal network
     print("Tree-based L-System result:")
     generator.render_sequence(result)
+
+
+"""
+New Symbols: INPUT and OUTPUT
+Represent data entry/exit points
+Connect to n-dimensional slices of tori (n ≤ torus dimensions)
+Placement rules vary based on loop configuration
+At least one of each required; configurable maximum
+
+Connection Rules
+Enforce TORUS-to-TORUS and TRANSFORM-to-TORUS connections (CONNECT_TOROIDS)
+INPUT connects to TORUS; OUTPUT from TORUS or TRANSFORM
+No connection required TORUS-to-TRANSFORM (TRANSFORM is a mutation of TORUS, its basically a TORUS *and* a mutation rule... its torus takes on the transformed values of the original)
+
+Post-processing
+Prune empty branches and unnecessary depth
+
+TRANSFORM Symbol
+Parameter determines transform type
+Interpretation handled at implementation level
+
+Loop Functionality
+Configurable enable/disable option
+Directional connections when enabled
+Various structures allowed (within/across branches and depths)
+Prevent orphaned flow areas
+All loops require both "input" and "output" (can be symbols or connections)
+
+Dimensionality and Size Constraints
+INPUT/OUTPUT dimensions must be compatible with connected TORUS
+Sizes limited by TORUS dimensions
+"""
