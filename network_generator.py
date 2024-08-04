@@ -117,9 +117,9 @@ class NetworkGenerator:
             if isinstance(item, Symbol):
                 print("  " * depth + f"{item.name}(p={item.parameter})")
             elif isinstance(item, list):
-                print("  " * depth + "⎡ BRANCH:")
+                print("  " * depth + "\\ BRANCH:")  # ⎡
                 NetworkGenerator.render_sequence(item, depth + 1)
-                print("  " * depth + "⎣ END BRANCH")
+                print("  " * depth + "/ END BRANCH")  # ⎣
 
 
 if __name__ == "__main__":
