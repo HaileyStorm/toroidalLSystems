@@ -131,9 +131,9 @@ class TorusViewer:
     def get_edges_from_faces(self):
         edges = set()
         for face in self.faces:
-            edges.add(tuple(sorted([face[0], face[1]])))
+            # The way Line with connect='segments' works, this is all we need for the wireframe
+            # (the horizontal and vertical lines)
             edges.add(tuple(sorted([face[1], face[2]])))
-            edges.add(tuple(sorted([face[2], face[0]])))
         return np.array(list(edges))
 
     def update_colors(self):
