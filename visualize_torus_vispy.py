@@ -57,7 +57,6 @@ class TorusViewer:
         # Create mesh for surface
         self.mesh = TorusMeshVisual(vertices=self.vertices, faces=self.faces,
                                     shading='flat', parent=self.view.scene)
-        self.mesh.ambient_light_color = vispy.color.Color('white')
 
         # Create lines for wireframe
         edges = self.get_edges_from_faces()
