@@ -1,3 +1,5 @@
+# Updated plan.txt
+
 📌 Project Overview & Structure:
 - Project Name: Hypertoroidal L-System Networks
 - Core Concept: Networks of interconnected toroidal arrays with growth and connectivity determined by L-system rules
@@ -16,30 +18,44 @@ Key Implementation Strategies:
 2. Flexible dimensionality in all components
 3. Stochastic, parameter-driven network generation
 4. Clear separations between generation, structure, and dynamics
+5. Support for input/output nodes and loop structures
 
 Development Phases:
 1. Core structures (pathways, junctions)
 2. Network management
-3. L-system based generation
+3. L-system based generation with extended functionality
 4. Visualization
 5. Example scenario
-
 
 🔹 network_generator.py:
 
 1. `Symbol(Enum)`:
-   - Values: CREATE_TORUS, CONNECT_TOROIDS, START_BRANCH, END_BRANCH, TRANSFORM
+   - Values: CREATE_TORUS, CONNECT_TOROIDS, START_BRANCH, END_BRANCH, TRANSFORM, INPUT, OUTPUT
    - Each symbol will have an associated integer parameter for variation
 
 2. `Rule`:
    - `predecessor: Symbol`
    - `successor: List[Symbol]`
    - `probability: float`
+   - `direction: Optional[str]`  # For loop functionality
 
-3. `NetworkGenerator`:
+3. `NetworkGeneratorConfig`:
+   - `max_depth: int`
+   - `balance_factor: float`
+   - `branching_factor: int`
+   - `create_torus_weights: List[float]`
+   - `connect_toroids_weights: List[float]`
+   - `allow_loops: bool`
+   - `max_loop_depth: int`
+   - `max_inputs: int`
+   - `max_outputs: int`
+
+4. `NetworkGenerator`:
    - `rules: Dict[Symbol, List[Rule]]`
    - `axiom: List[Symbol]`
+   - `config: NetworkGeneratorConfig`
    - `generate(iterations: int) -> List[Symbol]`
+   - `prune_network(sequence: List[Symbol]) -> List[Symbol]`
    - Uses NumPy for random selection based on probabilities
 
 🔹 pathway.py:
@@ -51,6 +67,7 @@ Development Phases:
    - `source: Tuple[Torus, Tuple[slice, ...]]`
    - `target: Tuple[Torus, Tuple[slice, ...]]`
    - `transfer_fn: TransferFunction`
+   - `direction: Optional[str]`  # For loop functionality
    - `update() -> None`: Applies transfer_fn and updates target
    - Allow broadcasting in slice mappings
 
@@ -68,9 +85,12 @@ Development Phases:
    - `toroids: Dict[int, Torus]`  # int is unique identifier
    - `pathways: List[Pathway]`
    - `junctions: List[Junction]`
+   - `inputs: List[Tuple[int, Tuple[slice, ...]]]`  # Torus ID and slice
+   - `outputs: List[Tuple[int, Tuple[slice, ...]]]`  # Torus ID and slice
    - `tick() -> None`: Updates all pathways and junctions
    - `inject_data(torus_id: int, data: np.ndarray, location: Tuple[slice, ...]) -> None`
    - `read_data(torus_id: int, location: Tuple[slice, ...]) -> np.ndarray`
+   - `create_from_generator(generator: NetworkGenerator) -> None`
 
 🔹 visualize.py:
 1. `TextNetworkVisualizer`:
@@ -78,16 +98,16 @@ Development Phases:
    - Shows toroids as [T1], [T2], etc
    - Pathways as arrows: →
    - Junctions as asterisks: *
+   - Inputs as [I] and Outputs as [O]
    - `visualize(network: Network) -> str`
    - Uses `textwrap` for formatting
    - Sample output:
      ```
-     [T1] → [T2]
-      ↓     ↓
-     [T3] * [T4]
+     [I] → [T1] → [T2]
+            ↓     ↓
+     [T3] * [T4] → [O]
      ```
 2. Future extension placeholder: `GraphNetworkVisualizer` using networkx/matplotlib
-
 
 🔹 Math & Architecture Decisions:
 1. All data transfer preserves dimensionality
@@ -95,20 +115,21 @@ Development Phases:
 3. Support n-dimensional toroids and transfers
 4. Arithmetic operations (+, *, etc) as default transfer functions
 5. Junctions support element-wise and reduction operations (sum, mean, min, max)
-6. L-system uses stochastic context-free grammar initially
+6. L-system uses stochastic context-free grammar with support for loops
 
 🔹 maze_solver_example.py:
 - Create 2D toroidal maze representation
 - Information "floods" through open pathways
 - Use sigmoid transfer function to create "pressure" mechanic
 - Junction max operation finds optimal paths
+- Demonstrate use of INPUT and OUTPUT nodes
 
 🔹 Implementation Order:
-1. NetworkGenerator (simplified)
-2. Pathway
-3. Junction
-4. Network
-5. Enhance NetworkGenerator (including the ability to update/expand and possibly evolve networks)
+1. Update NetworkGenerator (including new symbols and loop functionality)
+2. Modify Pathway to support directional connections
+3. Update Junction to handle potential loops
+4. Enhance Network to interpret extended L-system output
+5. Update visualization to include new symbols and connections
 
 🔹 Data Types:
 - All numeric data: np.float32
@@ -135,7 +156,7 @@ Testing strategy:
 - Edge case unit tests for Pathway and Junction
 - Integration tests on small networks
 - Performance benchmarks
-
+- Specific tests for loop functionality and INPUT/OUTPUT nodes
 
 
 ------------------------
