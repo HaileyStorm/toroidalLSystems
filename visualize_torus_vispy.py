@@ -176,10 +176,12 @@ class TorusViewer:
             elif event.key == 'Down':
                 self.phi_speed -= speed_change
         elif event.key in ['+', '=']:  # Both keys often share same button
-            new_dim = min(int(self.vertex_dim * 1.25), self.color_dim * 10)
+            new_dim = min(int(round(self.vertex_dim * 1.25)), self.color_dim * 10)
+            print(new_dim)
             self.regenerate_geometry(new_dim)
         elif event.key == '-':
-            new_dim = max(int(self.vertex_dim * 0.8), self.color_dim // 10)
+            new_dim = max(int(round(self.vertex_dim * 0.8)), self.color_dim // 10)
+            print(new_dim)
             self.regenerate_geometry(new_dim)
 
     def rotate(self, event):
