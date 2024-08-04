@@ -56,7 +56,8 @@ class TorusViewer:
 
         # Create mesh for surface
         self.mesh = TorusMeshVisual(vertices=self.vertices, faces=self.faces,
-                                    shading='smooth', parent=self.view.scene)
+                                    shading='flat', parent=self.view.scene)
+        self.mesh.ambient_light_color = vispy.color.Color('white')
 
         # Create lines for wireframe
         edges = self.get_edges_from_faces()
@@ -138,24 +139,31 @@ class TorusViewer:
 
     def update_colors(self):
         color_rows, color_cols = self.color_data.shape
-        theta_idxs, phi_idxs = np.meshgrid(np.arange(color_rows), np.arange(color_cols), indexing='ij')
-        flat_idx = theta_idxs.flatten()
-        flat_phi = phi_idxs.flatten()
+        vertex_rows, vertex_cols = self.vertex_dim, self.vertex_dim
 
-        raw_colors = np.array([value_to_rgb(self.color_data[t, p]) for t, p in zip(flat_idx, flat_phi)])
+        # Create a grid of coordinates for the vertex mesh
+        vertex_x, vertex_y = np.meshgrid(np.linspace(0, 1, vertex_cols, endpoint=False),
+                                         np.linspace(0, 1, vertex_rows, endpoint=False))
 
-        # Interpolate colors to match vertex count
-        old_idxs = np.linspace(0, raw_colors.shape[0], raw_colors.shape[0])
-        new_idxs = np.linspace(0, raw_colors.shape[0], self.vertices.shape[0])
-        colors = np.array([np.interp(new_idxs, old_idxs, raw_colors[:, i]) for i in range(3)]).T
-        vertex_colors = np.c_[colors, np.ones(colors.shape[0])]
+        # Map these coordinates to indices in the color data
+        color_x = (vertex_x * color_cols).astype(int) % color_cols
+        color_y = (vertex_y * color_rows).astype(int) % color_rows
+
+        # Generate colors for each grid cell
+        raw_colors = np.array([[value_to_rgb(self.color_data[color_y[i, j], color_x[i, j]])
+                                for j in range(vertex_cols)]
+                               for i in range(vertex_rows)])
+
+        # Reshape colors to match face count (2 faces per grid cell)
+        face_colors = np.repeat(raw_colors.reshape(-1, 3), 2, axis=0)
+        face_colors = np.c_[face_colors, np.ones(face_colors.shape[0])]
 
         if self.wireframe_mode:
             self.mesh.visible = False
             self.wireframe.set_data(color=(1, 1, 1, 1))  # Full opacity wireframe
         else:
             self.mesh.visible = True
-            self.mesh.set_data(vertices=self.vertices, faces=self.faces, vertex_colors=vertex_colors)
+            self.mesh.set_data(vertices=self.vertices, faces=self.faces, face_colors=face_colors)
             self.wireframe.set_data(color=(1, 1, 1, 0.3))  # Semi-transparent wireframe
 
         # Always keep wireframe visible
@@ -177,11 +185,9 @@ class TorusViewer:
                 self.phi_speed -= speed_change
         elif event.key in ['+', '=']:  # Both keys often share same button
             new_dim = min(int(round(self.vertex_dim * 1.25)), self.color_dim * 10)
-            print(new_dim)
             self.regenerate_geometry(new_dim)
         elif event.key == '-':
             new_dim = max(int(round(self.vertex_dim * 0.8)), self.color_dim // 10)
-            print(new_dim)
             self.regenerate_geometry(new_dim)
 
     def rotate(self, event):

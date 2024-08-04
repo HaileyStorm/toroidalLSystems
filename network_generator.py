@@ -155,7 +155,8 @@ Configurable enable/disable option
 Directional connections when enabled
 Various structures allowed (within/across branches and depths)
 Prevent orphaned flow areas
-All loops require both "input" and "output" (can be symbols or connections)
+All loops require both "input" and "output" (can be INPUT/OUTPUT or connections)
+Probably generate the base structure first, then add/validate(/fix/remove) loop(s)
 
 Dimensionality and Size Constraints
 INPUT/OUTPUT dimensions must be compatible with connected TORUS
