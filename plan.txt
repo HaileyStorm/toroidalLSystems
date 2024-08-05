@@ -11,6 +11,7 @@
   ├── junction.py            (toroid intersections)
   ├── network.py             (primary container & manager)
   ├── visualize.py           (network representation)
+  ├── manifold.py            (NEW: handles 4D manifold operations)
   └── maze_solver_example.py (demonstration scenario)
 
 Key Implementation Strategies:
@@ -19,9 +20,11 @@ Key Implementation Strategies:
 3. Stochastic, parameter-driven network generation
 4. Clear separations between generation, structure, and dynamics
 5. Support for input/output nodes and loop structures
+6. 4D manifold-based connections between tori
+7. Transformation operations integrated into the manifold structure
 
 Development Phases:
-1. Core structures (pathways, junctions)
+1. Core structures (pathways, junctions, manifolds)
 2. Network management
 3. L-system based generation with extended functionality
 4. Visualization
@@ -49,6 +52,7 @@ Development Phases:
    - `max_loop_depth: int`
    - `max_inputs: int`
    - `max_outputs: int`
+   - `manifold_sampling_points: int`  # NEW: number of sampling points along the manifold
 
 4. `NetworkGenerator`:
    - `rules: Dict[Symbol, List[Rule]]`
@@ -58,24 +62,39 @@ Development Phases:
    - `prune_network(sequence: List[Symbol]) -> List[Symbol]`
    - Uses NumPy for random selection based on probabilities
 
+🔹 manifold.py (NEW):
+
+1. `Manifold`:
+   - `source_torus: Torus`
+   - `target_torus: Torus`
+   - `sampling_points: int`
+   - `mask: Optional[np.ndarray]`
+   - `create_manifold() -> List[np.ndarray]`: Creates intermediate tori along the 4D manifold
+   - `interpolate(start: np.ndarray, end: np.ndarray) -> List[np.ndarray]`: Performs convolution/interpolation with modular indexing
+   - `apply_mask(torus: np.ndarray) -> np.ndarray`: Applies mask to create smaller tori
+   - `track_index(index: Tuple[int, ...]) -> List[Tuple[int, ...]]`: Tracks the path of an index through the manifold
+
+2. `TransformManifold(Manifold)`:
+   - `operations: List[Callable[[np.ndarray], np.ndarray]]`
+   - `apply_operations(torus: np.ndarray) -> np.ndarray`: Applies operations at each sampling point
+
 🔹 pathway.py:
 
 1. `TransferFunction(Protocol)`:
    - `__call__(data: np.ndarray) -> np.ndarray`
 
 2. `Pathway`:
-   - `source: Tuple[Torus, Tuple[slice, ...]]`
-   - `target: Tuple[Torus, Tuple[slice, ...]]`
+   - `manifold: Manifold`
    - `transfer_fn: TransferFunction`
    - `direction: Optional[str]`  # For loop functionality
-   - `update() -> None`: Applies transfer_fn and updates target
+   - `update() -> None`: Applies transfer_fn along the manifold and updates target
    - Allow broadcasting in slice mappings
 
 🔹 junction.py:
 
 1. `Junction`:
-   - `inputs: List[Tuple[Torus, Tuple[slice, ...]]]`
-   - `output: Tuple[Torus, Tuple[slice, ...]]`
+   - `inputs: List[Manifold]`
+   - `output: Manifold`
    - `operation: Callable[[List[np.ndarray]], np.ndarray]`
    - `update() -> None`: Gathers inputs, applies operation, sets output
 
@@ -91,6 +110,7 @@ Development Phases:
    - `inject_data(torus_id: int, data: np.ndarray, location: Tuple[slice, ...]) -> None`
    - `read_data(torus_id: int, location: Tuple[slice, ...]) -> np.ndarray`
    - `create_from_generator(generator: NetworkGenerator) -> None`
+   - `get_relative_position(torus_id: int) -> Tuple[int, int, int]`: Returns relative depth and lateral branch position
 
 🔹 visualize.py:
 1. `TextNetworkVisualizer`:
@@ -107,7 +127,12 @@ Development Phases:
             ↓     ↓
      [T3] * [T4] → [O]
      ```
-2. Future extension placeholder: `GraphNetworkVisualizer` using networkx/matplotlib
+2. `ManifoldVisualizer`:
+   - Projects 4D manifolds onto 3D space
+   - Uses color coding to represent values in the backing array
+   - Renders semi-transparent projections to show intermediate steps
+   - `visualize_manifold(manifold: Manifold) -> np.ndarray`: Returns a 3D array representing the projected manifold
+   - `visualize_network(network: Network) -> np.ndarray`: Returns a 3D array representing the entire network with manifold connections
 
 🔹 Math & Architecture Decisions:
 1. All data transfer preserves dimensionality
@@ -116,20 +141,27 @@ Development Phases:
 4. Arithmetic operations (+, *, etc) as default transfer functions
 5. Junctions support element-wise and reduction operations (sum, mean, min, max)
 6. L-system uses stochastic context-free grammar with support for loops
+7. 4D manifold connections between tori
+8. Convolution/interpolation with modular indexing for smooth transitions
+9. Masking for creating smaller tori and finer control over connections
+10. Index tracking along manifolds for accurate interpolation
 
 🔹 maze_solver_example.py:
 - Create 2D toroidal maze representation
-- Information "floods" through open pathways
+- Information "floods" through open pathways using manifold connections
 - Use sigmoid transfer function to create "pressure" mechanic
 - Junction max operation finds optimal paths
 - Demonstrate use of INPUT and OUTPUT nodes
+- Visualize the maze-solving process using ManifoldVisualizer
 
 🔹 Implementation Order:
-1. Update NetworkGenerator (including new symbols and loop functionality)
-2. Modify Pathway to support directional connections
-3. Update Junction to handle potential loops
-4. Enhance Network to interpret extended L-system output
-5. Update visualization to include new symbols and connections
+1. Implement Manifold and TransformManifold classes
+2. Update NetworkGenerator to include manifold-based connections
+3. Modify Pathway to use manifolds for connections
+4. Update Junction to handle manifold-based inputs and outputs
+5. Enhance Network to interpret extended L-system output and manage manifolds
+6. Implement ManifoldVisualizer for 4D manifold projection and visualization
+7. Update maze_solver_example to use manifold-based connections
 
 🔹 Data Types:
 - All numeric data: np.float32
@@ -140,16 +172,19 @@ Development Phases:
 - Use `np.vectorize` for transfer functions when possible
 - Employ `np.einsum` for complex slice mappings
 - Pre-allocate arrays in junctions and pathways
+- Optimize manifold calculations using NumPy operations
 
 🔹 Extensibility Hooks:
 1. Custom Symbol subclasses
 2. Pluggable TransferFunction protocol
 3. Network to accept custom tick logic
+4. Custom manifold creation and interpolation methods
 
 Error handling strategy:
 - Type checks using runtime_checkable protocols
 - Value range validations
 - Clear error messages with context
+- Manifold-specific error checks (e.g., dimensionality mismatches)
 
 Testing strategy:
 - Property-based testing for L-system generation
@@ -157,39 +192,104 @@ Testing strategy:
 - Integration tests on small networks
 - Performance benchmarks
 - Specific tests for loop functionality and INPUT/OUTPUT nodes
+- Manifold interpolation and projection tests
+- Visual tests for ManifoldVisualizer output
 
-
-------------------------
-
-
+Current Progress and Next Steps:
 So far we've:
-1. Implemented our L-System based Network Generator as a tree-structured, recursion-driven, genuinely-branching L-System.
-2. Added a degree of error-resilience, particularly around recursion.
-3. Introduced a configuration object (NetworkGeneratorConfig) which allows:
-   • Control over network complexity (max_depth)
-   • Control over network topology (balance_factor, branching_factor)
-   • Rule weighting (create_torus_weights, connect_toroids_weights)
-   • Deterministic output (seed)
-4. Implemented auto-normalization for our rule weights (// which maintains error-tolerance while preventing undefined behavior)
-5. Implemented a general tracer (render_sequence) which provides a text-based, human-readable output of our network "recipe"
 
-Key output: Our network generator produces a "recipe" — a executable, branching, reproducible description of a toroidal network — NOT the network itself.
+Implemented our L-System based Network Generator as a tree-structured, recursion-driven, genuinely-branching L-System.
+Added a degree of error-resilience, particularly around recursion.
+Introduced a configuration object (NetworkGeneratorConfig) which allows:
+• Control over network complexity (max_depth)
+• Control over network topology (balance_factor, branching_factor)
+• Rule weighting (create_torus_weights, connect_toroids_weights)
+• Loop functionality (allow_loops, max_loop_depth)
+• Input/Output limits (max_inputs, max_outputs)
+• Deterministic output (seed)
+Implemented auto-normalization for our rule weights (which maintains error-tolerance while preventing undefined behavior)
+Implemented a general tracer (render_sequence) which provides a text-based, human-readable output of our network "recipe"
 
+Key output: Our network generator produces a "recipe" — an executable, branching, reproducible description of a toroidal network — NOT the network itself.
 Key interface details:
-• Our "recipe" consists of Lists of Symbols/Lists[Symbols]  // where each Symbol carries a quantitative parameter
-• config = NetworkGeneratorConfig(params...) provides complete runtime configuration
-• generate() provides the recipe   // no parameters required; uses config
-• Rules are stochastic & weighted, but can be made deterministic via seed
+
+Our "recipe" consists of Lists of Symbols/Lists[Symbols]  // where each Symbol carries a quantitative parameter
+config = NetworkGeneratorConfig(params...) provides complete runtime configuration
+generate() provides the recipe   // no parameters required; uses config
+Rules are stochastic & weighted, but can be made deterministic via seed
 
 Critical for next phase:
-• The Pathway, Junction, and Network implementations will need to interpret & instantiate our "recipe"
-• We have five instruction types (Symbol VALUES) which they'll need to implement:
-   CREATE_TORUS  // which requires creating a new Torus object
-   CONNECT_TOROIDS  // which requires creating a new Pathway between two Tori
-   TRANSFORM  // which requires mutating an existing Torus
-   START_BRANCH, END_BRANCH   // which require parallel execution of a sequence
+
+The Pathway, Junction, and Network implementations will need to interpret & instantiate our "recipe"
+We have seven instruction types (Symbol VALUES) which they'll need to implement:
+CREATE_TORUS  // which requires creating a new Torus object
+CONNECT_TOROIDS  // which requires creating a new Pathway between two Tori
+TRANSFORM  // which requires mutating an existing Torus
+START_BRANCH, END_BRANCH   // which require parallel execution of a sequence
+INPUT  // which defines an entry point for data into the network
+OUTPUT  // which defines an exit point for data from the network
+Network generation constraints:
+
+When loops are disabled:
+
+The network must start with a single INPUT followed by a single TORUS
+At least one OUTPUT is required, with no forward connections after it
+
+
+When loops are enabled:
+
+INPUT and OUTPUT can be anywhere in the network
+At least one of each is required (max configurable in NetworkGeneratorConfig)
+
+
+INPUT always connects to a TORUS
+OUTPUT always connects from a TORUS or TRANSFORM
+Consecutive TORUS symbols or TRANSFORM to TORUS require a connection
+TORUS to TRANSFORM does not require a connection
+INPUT/OUTPUT represent n-dimensional arrays (n ≤ torus dimensions)
+Avoid orphaned flow in loops (all loops must have both "input" and "output")
 
 Next steps:
-1. Implement Pathway  // which defines how two Tori interact
-2. Implement Junction  // which defines how multiple Tori can have a shared interaction-point
-3. Implement Network  // which interprets our recipe, instantiates Tori, Pathways, and Junctions, and manages information flow & evolution
+1. Implement Manifold and TransformManifold classes
+   - Create methods for 4D manifold generation
+   - Implement convolution/interpolation with modular indexing
+   - Add masking functionality
+   - Develop index tracking along manifolds
+
+2. Update NetworkGenerator
+   - Integrate manifold-based connections into the L-system grammar
+   - Implement new constraints for INPUT/OUTPUT placement in looped networks
+   - Ensure proper handling of masked connections
+
+3. Modify Pathway
+   - Refactor to use Manifold for connections
+   - Implement directional connections using manifold properties
+
+4. Update Junction
+   - Adapt to handle manifold-based inputs and outputs
+   - Implement operations that work along the manifold
+
+5. Enhance Network
+   - Integrate manifold management into network structure
+   - Implement methods to handle 4D positioning of tori
+
+6. Implement ManifoldVisualizer
+   - Develop 4D to 3D projection methods
+   - Implement color coding for manifold values
+   - Create methods for rendering semi-transparent projections
+
+7. Update maze_solver_example
+   - Adapt the maze representation to use manifold-based connections
+   - Implement visualization of the solving process using ManifoldVisualizer
+
+8. Comprehensive testing
+   - Develop tests for new manifold-related functionality
+   - Create visual tests for ManifoldVisualizer output
+
+9. Documentation and code review
+   - Update all relevant documentation to reflect manifold-based architecture
+   - Conduct thorough code review to ensure consistency and optimality
+
+10. Performance optimization
+    - Profile manifold operations and optimize as necessary
+    - Investigate parallel processing opportunities for manifold calculations
