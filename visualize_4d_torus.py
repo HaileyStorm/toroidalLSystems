@@ -46,11 +46,18 @@ class TorusViewer:
         self.canvas = scene.SceneCanvas(keys='interactive', size=(800, 600))
         self.view = self.canvas.central_widget.add_view()
         self.view.camera = 'arcball'
-        self.view.camera.distance = 15
+        self.view.camera.distance = 3
         self.view.bgcolor = Color('#303030')
 
         # Initially start with surface mode
         self.wireframe_mode = False
+
+        # 4D rotation angles
+        self.theta1, self.theta2, self.theta3, self.theta4 = 0, 0, 0, 0
+        self.theta1_speed, self.theta2_speed = 0.00005, 0.00005
+
+        # Projection parameters
+        self.w_scale = 1.0  # Scale factor for w dimension before projection
 
         # Generate torus vertices
         self.generate_geometry(int(vertex_dim))
@@ -75,7 +82,7 @@ class TorusViewer:
 
         # Set up rotation
         self.theta, self.phi = 0, 0
-        self.theta_speed, self.phi_speed = 0.001, 0.00025
+        self.theta_speed, self.phi_speed = 0.0005, 0.0001
 
         self.timer = Timer(interval=1/60, connect=self.rotate, start=True)
 
@@ -85,21 +92,39 @@ class TorusViewer:
         self.text = scene.visuals.Text(
             "Mouse: Left-drag rotates view | Scroll zooms\n"
             "Space: Toggle wireframe/surface | <-->: Horizontal rotation | ^v: Vertical rotation",
-            color='white', font_size=10, pos=(self.canvas.size[0] // 2, 20), parent=self.canvas.scene)
+            color='white', font_size=10, pos=(self.canvas.size[0] // 2, 60), parent=self.canvas.scene)
 
-        self.status_text = scene.visuals.Text(f"θ-speed: {self.theta_speed:.4f} | φ-speed: {self.phi_speed:.4f}", color='white', font_size=10,
-                                             pos=(self.canvas.size[0] - 120, self.canvas.size[1] - 30), parent=self.canvas.scene)
+        self.status_text = scene.visuals.Text(f"θ-speed: {self.theta_speed:.6f} | φ-speed: {self.phi_speed:.6f}", color='white', font_size=10,
+                                             pos=(self.canvas.size[0] - 120, self.canvas.size[1] - 60), parent=self.canvas.scene)
 
         # Connect key press event
         self.canvas.events.key_press.connect(self.on_key_press)
 
+        # Update text instructions
+        self.text.text = (
+            "Mouse: Left-drag rotates view | Scroll zooms\n"
+            "Space: Toggle wireframe/surface\n"
+            "<-->: θ1 rotation | ^v: θ2 rotation\n"
+            "Q/E: Rotate θ3 | A/D: Rotate θ4\n"
+            "W/S: Adjust w-scale\n"
+            "+/-: Adjust quality"
+        )
+
     def generate_geometry(self, vertex_dim):
         R, r = 2, 1  # Major and minor radii
-        phi, theta = np.mgrid[0:2 * np.pi:vertex_dim * 1j, 0:2 * np.pi:vertex_dim * 1j]
-        x = (R + r * np.cos(phi)) * np.cos(theta)
-        y = (R + r * np.cos(phi)) * np.sin(theta)
-        z = r * np.sin(phi)
-        self.vertices = np.dstack((x, y, z)).reshape(-1, 3)
+        alpha, beta = np.mgrid[0:2 * np.pi:vertex_dim * 1j, 0:2 * np.pi:vertex_dim * 1j]
+        gamma, delta = np.mgrid[0:2 * np.pi:vertex_dim * 1j, 0:2 * np.pi:vertex_dim * 1j]
+
+        # Generate 4D coordinates
+        x = (R + r * np.cos(alpha)) * np.cos(beta)
+        y = (R + r * np.cos(alpha)) * np.sin(beta)
+        z = r * np.sin(alpha) * np.cos(gamma)
+        w = r * np.sin(alpha) * np.sin(gamma)
+
+        self.vertices_4d = np.dstack((x, y, z, w)).reshape(-1, 4)
+
+        # Generate 3D vertices through projection
+        self.project_4d_to_3d()
 
         # Generate faces
         idx = np.arange(vertex_dim ** 2).reshape(vertex_dim, vertex_dim)
@@ -129,6 +154,11 @@ class TorusViewer:
         self.mesh_parent.transform = old_transform
         self.update_colors()
 
+    def project_4d_to_3d(self):
+        # Simple perspective projection from 4D to 3D
+        w_adjusted = self.vertices_4d[:, 3] * self.w_scale + 5  # Add offset to avoid division by zero
+        self.vertices = self.vertices_4d[:, :3] / w_adjusted[:, np.newaxis]
+
     def get_edges_from_faces(self):
         edges = set()
         for face in self.faces:
@@ -141,13 +171,18 @@ class TorusViewer:
         color_rows, color_cols = self.color_data.shape
         vertex_rows, vertex_cols = self.vertex_dim, self.vertex_dim
 
-        # Create a grid of coordinates for the vertex mesh
-        vertex_x, vertex_y = np.meshgrid(np.linspace(0, 1, vertex_cols, endpoint=False),
-                                         np.linspace(0, 1, vertex_rows, endpoint=False))
+        # Map 4D coordinates to 2D color indices
+        # We'll use alpha and beta angles for this
+        alpha = np.arctan2(self.vertices_4d[:, 2], self.vertices_4d[:, 0]).reshape(vertex_rows, vertex_cols)
+        beta = np.arctan2(self.vertices_4d[:, 3], self.vertices_4d[:, 1]).reshape(vertex_rows, vertex_cols)
 
-        # Map these coordinates to indices in the color data
-        color_x = (vertex_x * color_cols).astype(int) % color_cols
-        color_y = (vertex_y * color_rows).astype(int) % color_rows
+        # Normalize to [0, 1]
+        alpha_norm = (alpha + np.pi) / (2 * np.pi)
+        beta_norm = (beta + np.pi) / (2 * np.pi)
+
+        # Map to color indices
+        color_x = (alpha_norm * color_cols).astype(int) % color_cols
+        color_y = (beta_norm * color_rows).astype(int) % color_rows
 
         # Generate colors for each grid cell
         raw_colors = np.array([[value_to_rgb(self.color_data[color_y[i, j], color_x[i, j]])
@@ -174,41 +209,98 @@ class TorusViewer:
             self.wireframe_mode = not self.wireframe_mode
             self.update_colors()
         elif event.key in ['Left', 'Right', 'Up', 'Down']:
-            speed_change = 0.00025
+            speed_change = 0.00001
             if event.key == 'Left':
-                self.theta_speed -= speed_change
+                self.theta1_speed -= speed_change
             elif event.key == 'Right':
-                self.theta_speed += speed_change
+                self.theta1_speed += speed_change
             elif event.key == 'Up':
-                self.phi_speed += speed_change
+                self.theta2_speed += speed_change
             elif event.key == 'Down':
-                self.phi_speed -= speed_change
+                self.theta2_speed -= speed_change
         elif event.key in ['+', '=']:  # Both keys often share same button
             new_dim = min(int(round(self.vertex_dim * 1.25)), self.color_dim * 10)
             self.regenerate_geometry(new_dim)
         elif event.key == '-':
             new_dim = max(int(round(self.vertex_dim * 0.8)), self.color_dim // 10)
             self.regenerate_geometry(new_dim)
+        elif event.key == 'W':
+            self.w_scale *= 1.1
+        elif event.key == 'S':
+            self.w_scale /= 1.1
+        elif event.key == 'Q':
+            self.theta3 += 0.001
+        elif event.key == 'E':
+            self.theta3 -= 0.001
+        elif event.key == 'A':
+            self.theta4 += 0.0005
+        elif event.key == 'D':
+            self.theta4 -= 0.0005
+
+    def rotate_4d(self):
+        # 4D rotation matrices
+        def R4_xy(theta): return np.array([
+            [np.cos(theta), -np.sin(theta), 0, 0],
+            [np.sin(theta), np.cos(theta), 0, 0],
+            [0, 0, 1, 0],
+            [0, 0, 0, 1]
+        ])
+
+        def R4_xz(theta): return np.array([
+            [np.cos(theta), 0, -np.sin(theta), 0],
+            [0, 1, 0, 0],
+            [np.sin(theta), 0, np.cos(theta), 0],
+            [0, 0, 0, 1]
+        ])
+
+        def R4_xw(theta): return np.array([
+            [np.cos(theta), 0, 0, -np.sin(theta)],
+            [0, 1, 0, 0],
+            [0, 0, 1, 0],
+            [np.sin(theta), 0, 0, np.cos(theta)]
+        ])
+
+        def R4_yz(theta): return np.array([
+            [1, 0, 0, 0],
+            [0, np.cos(theta), -np.sin(theta), 0],
+            [0, np.sin(theta), np.cos(theta), 0],
+            [0, 0, 0, 1]
+        ])
+
+        # Apply rotations
+        vertices = self.vertices_4d.copy()
+        vertices = vertices @ R4_xy(self.theta1).T
+        vertices = vertices @ R4_xz(self.theta2).T
+        vertices = vertices @ R4_yz(self.theta3).T
+        vertices = vertices @ R4_xw(self.theta4).T
+
+        self.vertices_4d = vertices
+        self.project_4d_to_3d()
+
+        # Update mesh and wireframe
+        self.mesh.set_data(vertices=self.vertices, faces=self.faces)
+        edges = self.get_edges_from_faces()
+        self.wireframe.set_data(pos=self.vertices[edges].reshape((-1, 3)))
+
+        self.update_colors()
 
     def rotate(self, event):
-        self.theta += self.theta_speed
-        self.phi += self.phi_speed
+        # Update rotation angles
+        self.theta1 += self.theta1_speed
+        self.theta2 += self.theta2_speed
 
-        # Create a single transform
-        transform = MatrixTransform()
+        self.rotate_4d()
 
-        # Apply both rotations
-        transform.rotate(np.degrees(self.theta), (0, 1, 0))  # Around Y-axis for better visual
-        transform.rotate(np.degrees(self.phi), (1, 0, 0))  # Around X-axis
-
-        # Set the transform to the parent node
-        self.mesh_parent.transform = transform
-
-        # Update rotation speed text
-        self.status_text.text = (f"θ: {self.theta:.2f} (speed: {self.theta_speed:.4f})\n"
-                                 f"φ: {self.phi:.2f} (speed: {self.phi_speed:.4f})")
+        # Update status text
+        self.status_text.text = (
+            f"θ1: {self.theta1:.6f} ({self.theta1_speed:.6f})\n"
+            f"θ2: {self.theta2:.6f} ({self.theta2_speed:.6f})\n"
+            f"θ3: {self.theta3:.6f}\n"
+            f"θ4: {self.theta4:.6f}\n" 
+            f"w-scale: {self.w_scale:.4f}"
+        )
         v_ratio = (self.vertex_dim ** 2) / (self.color_dim ** 2)
-        self.status_text.text += f"\nQuality: {v_ratio:.2f}x (use +/- to change)"
+        self.status_text.text += f"\nQuality: {v_ratio:.2f}x"
 
     def run(self):
         self.canvas.show()
